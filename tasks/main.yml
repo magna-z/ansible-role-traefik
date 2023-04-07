@@ -1,0 +1,114 @@
+---
+- name: ensure group
+  ansible.builtin.group:
+    name: traefik
+    gid: "{{ traefik_gid }}"
+
+- name: ensure user
+  ansible.builtin.user:
+    name: traefik
+    group: traefik
+    shell: /sbin/nologin
+    uid: "{{ traefik_uid }}"
+    home: /var/lib/traefik
+    create_home: false
+
+- name: ensure config directories
+  ansible.builtin.file:
+    state: directory
+    path: "{{ item }}"
+    owner: "{{ traefik_uid }}"
+    group: "{{ traefik_uid }}"
+    mode: 0750
+  with_items: [/etc/traefik, /etc/traefik/ssl, /var/lib/traefik]
+
+- name: ensure main config
+  notify: restart service traefik
+  ansible.builtin.copy:
+    dest: /etc/traefik/config.yml
+    content: "{{ traefik_main_config }}"
+    owner: "{{ traefik_uid }}"
+    group: "{{ traefik_uid }}"
+    mode: 0640
+
+- name: ensure dynamic configs
+  notify: restart service traefik
+  ansible.builtin.copy:
+    dest: "/etc/traefik/{{ item.filename }}"
+    content: "{{ item.content }}"
+    owner: "{{ traefik_uid }}"
+    group: "{{ traefik_uid }}"
+    mode: 0640
+  loop: "{{ traefik_dynamic_config_files }}"
+
+- name: ensure ssl files
+  notify: restart service traefik
+  ansible.builtin.copy:
+    dest: "/etc/traefik/ssl/{{ item.filename }}"
+    content: "{{ item.content }}"
+    owner: "{{ traefik_uid }}"
+    group: "{{ traefik_uid }}"
+    mode: 0640
+  loop: "{{ traefik_ssl_files }}"
+
+- name: ensure systemd traefik.service
+  notify: restart service traefik
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/traefik.service
+    owner: root
+    group: root
+    mode: 0644
+    content: |
+      [Unit]
+      Requires=docker.service
+      After=docker.service
+      StartLimitIntervalSec=0
+      [Service]
+      ExecStartPre=-/usr/bin/docker rm --force %N
+      ExecStart=/usr/bin/docker run \
+        --name=%N \
+        --rm=true \
+        --pid=host \
+        --log-driver=none \
+        --stop-timeout=30 \
+        --user={{ traefik_uid }}:{{ '997' if traefik_docker_network != 'host' else traefik_gid }} \
+        --network={{ traefik_docker_network }} \
+        {% if traefik_docker_network != 'host' -%}
+        {% for publish in treafik_docker_publish_ports -%}
+        --publish={{ publish }} \
+        {% endfor -%}
+        {% endif -%}
+        {% for key, value in traefik_docker_environments.items() -%}
+        --env={{ key }}={{ value }} \
+        {% endfor -%}
+        {% for key,  value in traefik_docker_labels.items() -%}
+        --label={{ key }}={{ value }} \
+        {% endfor -%}
+        {% if traefik_docker_network != 'host' -%}
+        --volume=/var/run/docker.sock:/var/run/docker.sock:ro \
+        {% endif -%}
+        --volume=/etc/localtime:/etc/localtime:ro \
+        --volume=/etc/timezone:/etc/timezone:ro \
+        --volume=/etc/traefik:/etc/traefik:ro \
+        --volume=/var/lib/traefik:/var/lib/traefik:rw \
+        --volume=/etc/ssl/certs:/etc/ssl/certs:ro \
+        --volume=/usr/local/share/ca-certificates:/usr/local/share/ca-certificates:ro \
+        --workdir=/var/lib/traefik \
+        --entrypoint=/usr/local/bin/traefik \
+        {{ traefik_docker_image }} --configfile=/etc/traefik/config.yml
+      ExecStop=/usr/bin/docker stop %N
+      Restart=always
+      RestartSec=10
+      KillMode=process
+      [Install]
+      WantedBy=multi-user.target
+
+- name: execute handlers
+  ansible.builtin.meta: flush_handlers
+
+- name: start service traefik
+  ansible.builtin.systemd:
+    name: traefik
+    daemon_reload: true
+    enabled: true
+    state: started

@@ -1,0 +1,14 @@
+---
+traefik_docker_image: traefik:latest
+traefik_docker_environments: {}
+traefik_docker_labels: {}
+
+traefik_docker_network: bridge
+treafik_docker_publish_ports: []
+
+traefik_uid: "80"
+traefik_gid: "80"
+
+traefik_main_config: ""
+traefik_dynamic_config_files: []
+traefik_ssl_files: []

@@ -1,0 +1,10 @@
+---
+dependencies: []
+galaxy_info:
+  description: Configure and run Traefik
+  author: Maxim Zalysin
+  license: MIT
+  min_ansible_version: "2.14"
+  platforms:
+    - name: GenericLinux
+      version: [any]
