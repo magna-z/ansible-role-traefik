@@ -74,15 +74,15 @@
         --user={{ traefik_uid }}:{{ '997' if traefik_docker_network != 'host' else traefik_gid }} \
         --network={{ traefik_docker_network }} \
         {% if traefik_docker_network != 'host' -%}
-        {% for publish in treafik_docker_publish_ports -%}
+        {% for publish in traefik_docker_publish_ports -%}
         --publish={{ publish }} \
         {% endfor -%}
         {% endif -%}
         {% for key, value in traefik_docker_environments.items() -%}
-        --env={{ key }}={{ value }} \
+        --env={{ key }}="{{ value }}" \
         {% endfor -%}
-        {% for key,  value in traefik_docker_labels.items() -%}
-        --label={{ key }}={{ value }} \
+        {% for key, value in traefik_docker_labels.items() -%}
+        --label={{ key }}="{{ value }}" \
         {% endfor -%}
         {% if traefik_docker_network != 'host' -%}
         --volume=/var/run/docker.sock:/var/run/docker.sock:ro \

@@ -15,7 +15,7 @@ Configure and run Traefik from docker image as systemd.service.
 - **`traefik_docker_labels`** *(type=list, default=[])*
 
 - **`traefik_docker_network`** *(type=string, default="bridge")*
-- **`treafik_docker_publish_ports`** *(type=list, default=[])*
+- **`traefik_docker_publish_ports`** *(type=list, default=[])*
 
 - **`traefik_uid`**, **`traefik_gid`** *(type=number, default=80)* - System user and group for run Treafik and store data.
 
