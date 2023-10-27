@@ -81,6 +81,11 @@
         mode: "0640"
       loop: "{{ traefik_ssl_files }}"
 
+- name: get docker group id
+  ansible.builtin.getent:
+    database: group
+    key: docker
+
 - name: ensure systemd traefik.service
   notify: restart service traefik
   ansible.builtin.copy:
@@ -100,8 +105,8 @@
         --rm=true \
         --pid=host \
         --log-driver=none \
-        --stop-timeout=30 \
-        --user={{ traefik_uid }}:{{ '997' if traefik_docker_network != 'host' else traefik_gid }} \
+        --stop-timeout=60 \
+        --user={{ traefik_uid }}:{{ ansible_facts.getent_group.docker[1] if traefik_docker_network != 'host' else traefik_gid }} \
         --network={{ traefik_docker_network }} \
         {% if traefik_docker_network != 'host' %}{% for publish in traefik_docker_publish_ports -%}
         --publish={{ publish }} \

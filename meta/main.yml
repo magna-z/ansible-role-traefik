@@ -4,7 +4,6 @@ galaxy_info:
   description: Configure and run Traefik as Docker container into systemd.service.
   author: Maxim Zalysin
   license: MIT
-  min_ansible_version: "2.15"
   platforms:
     - name: GenericLinux
       version: [any]
