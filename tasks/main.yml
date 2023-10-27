@@ -1,4 +1,10 @@
 ---
+- name: check mandatory variables
+  ansible.builtin.assert:
+    that:
+      - traefik_main_config is defined
+    quiet: true
+
 - name: ensure group
   ansible.builtin.group:
     name: traefik
@@ -13,14 +19,14 @@
     home: /var/lib/traefik
     create_home: false
 
-- name: ensure config directories
+- name: ensure work directories
   ansible.builtin.file:
     state: directory
     path: "{{ item }}"
     owner: "{{ traefik_uid }}"
     group: "{{ traefik_uid }}"
-    mode: 0750
-  with_items: [/etc/traefik, /etc/traefik/ssl, /var/lib/traefik]
+    mode: "0750"
+  with_items: [/etc/traefik, /etc/traefik/config.d, /etc/traefik/ssl, /var/lib/traefik]
 
 - name: ensure main config
   notify: restart service traefik
@@ -29,27 +35,51 @@
     content: "{{ traefik_main_config }}"
     owner: "{{ traefik_uid }}"
     group: "{{ traefik_uid }}"
-    mode: 0640
+    mode: "0640"
 
 - name: ensure dynamic configs
-  notify: restart service traefik
-  ansible.builtin.copy:
-    dest: "/etc/traefik/{{ item.filename }}"
-    content: "{{ item.content }}"
-    owner: "{{ traefik_uid }}"
-    group: "{{ traefik_uid }}"
-    mode: 0640
-  loop: "{{ traefik_dynamic_config_files }}"
+  block:
+    - name: find current configs
+      ansible.builtin.find:
+        paths: /etc/traefik/config.d
+      register: _traefik_config_d
+
+    - name: remove current configs
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: absent
+      loop: "{{ _traefik_config_d.files }}"
+
+    - name: ensure config files
+      ansible.builtin.copy:
+        dest: "/etc/traefik/config.d/{{ item.filename }}"
+        content: "{{ item.content }}"
+        owner: "{{ traefik_uid }}"
+        group: "{{ traefik_gid }}"
+        mode: "0640"
+      loop: "{{ traefik_dynamic_config_files }}"
 
 - name: ensure ssl files
-  notify: restart service traefik
-  ansible.builtin.copy:
-    dest: "/etc/traefik/ssl/{{ item.filename }}"
-    content: "{{ item.content }}"
-    owner: "{{ traefik_uid }}"
-    group: "{{ traefik_uid }}"
-    mode: 0640
-  loop: "{{ traefik_ssl_files }}"
+  block:
+    - name: find current configs
+      ansible.builtin.find:
+        paths: /etc/traefik/ssl
+      register: _traefik_ssl
+
+    - name: remove current configs
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: absent
+      loop: "{{ _traefik_ssl.files }}"
+
+    - name: ensure config files
+      ansible.builtin.copy:
+        dest: "/etc/traefik/ssl/{{ item.filename }}"
+        content: "{{ item.content }}"
+        owner: "{{ traefik_uid }}"
+        group: "{{ traefik_gid }}"
+        mode: "0640"
+      loop: "{{ traefik_ssl_files }}"
 
 - name: ensure systemd traefik.service
   notify: restart service traefik
@@ -57,7 +87,7 @@
     dest: /etc/systemd/system/traefik.service
     owner: root
     group: root
-    mode: 0644
+    mode: "0644"
     content: |
       [Unit]
       Requires=docker.service
@@ -73,17 +103,15 @@
         --stop-timeout=30 \
         --user={{ traefik_uid }}:{{ '997' if traefik_docker_network != 'host' else traefik_gid }} \
         --network={{ traefik_docker_network }} \
-        {% if traefik_docker_network != 'host' -%}
-        {% for publish in traefik_docker_publish_ports -%}
+        {% if traefik_docker_network != 'host' %}{% for publish in traefik_docker_publish_ports -%}
         --publish={{ publish }} \
-        {% endfor -%}
-        {% endif -%}
-        {% for key, value in traefik_docker_environments.items() -%}
+        {% endfor %}{% endif -%}
+        {% if traefik_docker_envs | length > 0 %}{% for key, value in traefik_docker_envs.items() -%}
         --env={{ key }}="{{ value }}" \
-        {% endfor -%}
-        {% for key, value in traefik_docker_labels.items() -%}
+        {% endfor %}{% endif -%}
+        {% if traefik_docker_labels | length > 0 %}{% for key, value in traefik_docker_labels.items() -%}
         --label={{ key }}="{{ value }}" \
-        {% endfor -%}
+        {% endfor %}{% endif -%}
         {% if traefik_docker_network != 'host' -%}
         --volume=/var/run/docker.sock:/var/run/docker.sock:ro \
         {% endif -%}
